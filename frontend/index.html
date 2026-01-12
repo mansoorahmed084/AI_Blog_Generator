@@ -5,12 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tailwind CSS Template</title>
     <!-- Tailwind CSS CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom CSS for Loading Spinner -->
+    <style>
+        /* Rotating spinner animation */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .spinner {
+            animation: spin 1s linear infinite;
+            width: 4rem;
+            height: 4rem;
+            border: 4px solid #dbeafe;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+        }
+        
+        /* Fade in/out animation for loading overlay */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        /* Ensure hidden class works */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Ensure overlay is on top */
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+        }
+    </style>
 </head>
 <body class="flex flex-col min-h-screen bg-gray-100 font-sans antialias">
     <nav class="bg-blue-600 p-4 text-white flex justify-between">
         <div>
-            <h1 class="text-3xl font-bold">AI Blog Generator</h1>
+            <h1 class="text-3xl font-bold">AI AI Blog Generator</h1>
         </div> 
         <div>
             <a href="#" class="text-white hover:underline">Logout </a>
@@ -20,12 +63,12 @@
     <br>
 
     <!--Main-->
-    <div class="flex-grow container mx-auto mt-10 sm:pix-0">
-        <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md transition-transfor transform hover:scale-105 flex flex-col">
+    <div class="flex-grow container mx-auto mt-10 sm:px-0">
+        <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md transition-transform transform hover:scale-105 flex flex-col">
             <!--Introduction section-->
             <div class="text-center">
                 <h2 class="text-2xl font-semibold mb-4">Welcome to AI Blog Generator</h2>
-                <p class="text-gray-700">Generate high quality blog articles from YouTube videos using Artificaial Intelligence.
+                <p class="text-gray-700">Generate high quality blog articles from YouTube videos using Artificial Intelligence.
                     Simply enter the video link to YouTube video below and press the button
                 </p>
             </div>
@@ -36,9 +79,10 @@
             <h2 class="text-xl mb-4 font-semibold">Enter the YouTube link here</h2>
             <div class="flex space-x-4">
                 <input id="youtubelink" type="url" placeholder="Paste Youtube link..." class="flex-grow p-2 border border-blue-400 rounded-l-md">
-                <button id="generateBlogButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors">GenerateBlogButton</button>
+                <button id="generateBlogButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors">generate Blog</button>
             </div>
         </div>
+
         <!--Generted blog display section-->
         <section class="mt-10 flex-grow">
             <h2 class="text-xl mb-4  font-semibold">Generated blog article</h2>
@@ -49,12 +93,53 @@
     </div>
 
     <footer class="text-center p-4 text-black mt-6">
-        Powered by <a href="">MansoorAhmed084</a>
+        Powered by <a href="https://www.youtube.com/c/CodeWithTomi" class="text-blue-600 hover:underline">CodeWithTomi</a>
     </footer>
 
+    <!-- Loading Spinner Overlay - MUST be outside main content for fixed positioning -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 fade-in">
+        <div class="bg-white rounded-lg p-8 flex flex-col items-center shadow-xl">
+            <!-- Rotating Circle Spinner -->
+            <div class="spinner w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full mb-4"></div>
+            <p class="text-gray-700 text-lg font-semibold">Processing...</p>
+            <p class="text-gray-500 text-sm mt-2">Transcribing video and generating text</p>
+        </div>
+    </div>
+
+    <!-- JavaScript to show/hide spinner -->
     <script>
+        // Function to show loading spinner
+        function showLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+            }
+        }
         
+        // Function to hide loading spinner
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) {
+                overlay.classList.add('hidden');
+            }
+        }
+        
+        // Show spinner when GenerateBlogButton is clicked
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateButton = document.getElementById('generateBlogButton');
+            if (generateButton) {
+                generateButton.addEventListener('click', function() {
+                    showLoading();
+                    // TODO: Replace this setTimeout with your actual video processing code
+                    // This is just for testing - remove when you add real processing logic
+                    setTimeout(function() {
+                        hideLoading();
+                    }, 3000);
+                });
+            }
+        });
     </script>
 
 </body>
+</html>
 </html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - AI Blog Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Smooth transitions */
+        .transition-all {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen bg-gray-100 font-sans antialias">
+    <!-- Navigation Bar -->
+    <nav class="bg-blue-600 p-4 text-white">
+        <div class="container mx-auto">
+            <h1 class="text-2xl font-bold">AI Blog Generator</h1>
+        </div>
+    </nav>
+
+    <!-- Main Signup Container -->
+    <div class="flex-grow flex items-center justify-center px-4 py-12">
+        <div class="w-full max-w-md">
+            <!-- Signup Card -->
+            <div class="bg-white rounded-lg shadow-lg p-8">
+                <!-- Header -->
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">Welcome</h2>
+                    <p class="text-gray-600">Please enter your details to Sign up</p>
+                </div>
+
+                <!-- Sign Up Form -->
+                <form id="SignUpForm" class="space-y-6">
+                    <!-- Username Field -->
+                    <div>
+                        <label for="username" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Username
+                        </label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            required
+                            placeholder="Enter your username"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        >
+                    </div>
+
+                    <!-- Email Id Field -->
+                    <div>
+                        <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Email
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required
+                            placeholder="Enter your email address"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        >
+                    </div>
+
+                    <!-- Password Field -->
+                    <div>
+                        <label for="password" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            placeholder="Enter your password"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        >
+                    </div>
+
+                    <!-- Repeat Password Field -->
+                    <div>
+                        <label for="repeatPassword" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Repeat Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="repeatPassword" 
+                            name="repeatPassword" 
+                            required
+                            placeholder="Confirm your password again"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        >
+                    </div>
+
+                    <!-- SignUp Button -->
+                    <button 
+                        type="submit"
+                        id="SignUpButton"
+                        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        Sign Up
+                    </button>
+                </form>
+
+                <!-- Divider -->
+                <div class="my-6 flex items-center">
+                    <div class="flex-grow border-t border-gray-300"></div>
+                </div>
+
+                <!-- Login Link -->
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">
+                        Already have an account? 
+                        <a href="index.html" class="text-blue-600 hover:text-blue-800 font-semibold hover:underline">
+                            Sign in
+                        </a>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer Note -->
+            <p class="text-center text-sm text-gray-500 mt-6">
+                Powered by <a href="https://www.youtube.com/c/CodeWithTomi" class="text-blue-600 hover:underline">CodeWithTomi</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- JavaScript for Form Handling -->
+    <script>
+        document.getElementById('SignUpForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent form submission
+            
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const repeatPassword = document.getElementById('repeatPassword').value;
+            
+            // Basic validation
+            if (!username || !email || !password || !repeatPassword) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            // Email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Please enter a valid email address');
+                return;
+            }
+            
+            // Password validation
+            if (password !== repeatPassword) {
+                alert('Passwords do not match');
+                return;
+            }
+            
+            // Password strength validation (optional - at least 6 characters)
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters long');
+                return;
+            }
+            
+            // Get signup button
+            const SignUpButton = document.getElementById('SignUpButton');
+            const originalText = SignUpButton.textContent;
+            
+            // Show loading state
+            SignUpButton.disabled = true;
+            SignUpButton.textContent = 'Signing Up...';
+            SignUpButton.classList.add('opacity-75', 'cursor-not-allowed');
+            
+            // Simulate signup process (replace with actual authentication)
+            setTimeout(function() {
+                // TODO: Replace this with your actual signup logic
+                console.log('Username:', username);
+                console.log('Email:', email);
+                console.log('Password:', password);
+                
+                // Example: Redirect to main app after successful login
+                // window.location.href = '../frontend/index.html';
+                
+                // Reset button state (remove this when you add real authentication)
+                SignUpButton.disabled = false;
+                SignUpButton.textContent = originalText;
+                SignUpButton.classList.remove('opacity-75', 'cursor-not-allowed');
+                
+                // For now, just show an alert
+                alert('SignUp functionality - Replace with actual Sign up');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -82,9 +82,12 @@
                             <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                                 Edit
                             </button>
-                            <button class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm">
-                                Delete
-                            </button>
+                            <form method="POST" action="{% url 'delete_blog' blog_post.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm">
+                                    Delete
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -125,33 +128,15 @@
 
     <!-- JavaScript for Interactive Features -->
     <script>
-        // Function to handle blog post actions
-        function handleReadMore(blogId) {
-            // TODO: Implement navigation to full blog post page
-            console.log('Reading blog post:', blogId);
-            alert('Navigate to full blog post view');
-        }
-
-        function handleEdit(blogId) {
-            // TODO: Implement edit functionality
-            console.log('Editing blog post:', blogId);
-            alert('Edit blog post functionality');
-        }
-
-        function handleDelete(blogId) {
-            // TODO: Implement delete functionality with confirmation
-            if (confirm('Are you sure you want to delete this blog post?')) {
-                console.log('Deleting blog post:', blogId);
-                // Remove the blog post from the DOM or make API call
-                alert('Blog post deleted');
-            }
-        }
-
-        // Add event listeners to buttons (when you have multiple blog posts)
         document.addEventListener('DOMContentLoaded', function() {
-            // Example: Add click handlers to all "Read More" buttons
-            const readMoreButtons = document.querySelectorAll('button:contains("Read More")');
-            // You can add more interactive features here
+            const deleteForms = document.querySelectorAll('form[action*="blog-delete"]');
+            deleteForms.forEach((form) => {
+                form.addEventListener('submit', function(event) {
+                    if (!confirm('Are you sure you want to delete this blog post? This action cannot be undone.')) {
+                        event.preventDefault();
+                    }
+                });
+            });
         });
     </script>
 </body>

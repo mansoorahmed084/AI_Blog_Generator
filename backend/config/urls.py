@@ -30,6 +30,7 @@ urlpatterns = [
     path('test-blog-generator/', views.test_blog_generator, name='test_blog_generator'),  # Debug endpoint
     path('blogs/', views.all_blog_posts, name='all_blog_posts'),
     path('blog-details/<int:blog_id>/', views.blog_details, name='blog_details'),
+    path('blog-delete/<int:blog_id>/', views.delete_blog, name='delete_blog'),
     path('blog-details/', views.blog_details, name='blog_details'),  # Fallback for demo
 ]
 

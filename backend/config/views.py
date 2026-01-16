@@ -154,6 +154,16 @@ def blog_details(request, blog_id=None):
     return render(request, 'blog-details.html', context)
 
 
+@login_required
+@require_http_methods(["POST"])
+def delete_blog(request, blog_id):
+    """Delete a blog post owned by the logged-in user"""
+    blog_post = get_object_or_404(BlogPost, id=blog_id, author=request.user)
+    blog_post.delete()
+    messages.success(request, 'Blog post deleted successfully.')
+    return redirect('all_blog_posts')
+
+
 @require_http_methods(["POST"])
 def generate_blog(request):
     """Generate blog post from YouTube URL"""

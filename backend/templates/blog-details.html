@@ -127,17 +127,22 @@
         {% endif %}
 
         <!-- Action Buttons -->
+        {% if blog_post %}
         <div class="flex justify-center space-x-4 mb-6">
-            <button class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+            <button id="editBlogButton" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
                 Edit Blog
             </button>
-            <button class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors font-semibold">
+            <button id="shareBlogButton" class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors font-semibold">
                 Share
             </button>
-            <button class="bg-red-100 text-red-600 px-6 py-3 rounded-lg hover:bg-red-200 transition-colors font-semibold">
-                Delete
-            </button>
+            <form id="deleteBlogForm" method="POST" action="{% url 'delete_blog' blog_post.id %}">
+                {% csrf_token %}
+                <button type="submit" class="bg-red-100 text-red-600 px-6 py-3 rounded-lg hover:bg-red-200 transition-colors font-semibold">
+                    Delete
+                </button>
+            </form>
         </div>
+        {% endif %}
     </div>
 
     <!-- Footer with YouTube Link Details -->
@@ -202,39 +207,39 @@
 
     <!-- JavaScript for Interactive Features -->
     <script>
-        // Function to handle edit button
-        document.querySelector('button:contains("Edit Blog")')?.addEventListener('click', function() {
-            // TODO: Implement edit functionality
-            console.log('Edit blog post');
-            alert('Edit functionality - Navigate to edit page');
-        });
+        const editButton = document.getElementById('editBlogButton');
+        if (editButton) {
+            editButton.addEventListener('click', function() {
+                // TODO: Implement edit functionality
+                console.log('Edit blog post');
+                alert('Edit functionality - Navigate to edit page');
+            });
+        }
 
-        // Function to handle share button
-        document.querySelector('button:contains("Share")')?.addEventListener('click', function() {
-            // TODO: Implement share functionality
-            if (navigator.share) {
-                navigator.share({
-                    title: document.querySelector('h1').textContent,
-                    text: 'Check out this blog post!',
-                    url: window.location.href
-                });
-            } else {
-                // Fallback: Copy to clipboard
-                navigator.clipboard.writeText(window.location.href);
-                alert('Link copied to clipboard!');
-            }
-        });
+        const shareButton = document.getElementById('shareBlogButton');
+        if (shareButton) {
+            shareButton.addEventListener('click', function() {
+                if (navigator.share) {
+                    navigator.share({
+                        title: document.querySelector('h1').textContent,
+                        text: 'Check out this blog post!',
+                        url: window.location.href
+                    });
+                } else {
+                    navigator.clipboard.writeText(window.location.href);
+                    alert('Link copied to clipboard!');
+                }
+            });
+        }
 
-        // Function to handle delete button
-        document.querySelector('button:contains("Delete")')?.addEventListener('click', function() {
-            if (confirm('Are you sure you want to delete this blog post? This action cannot be undone.')) {
-                // TODO: Implement delete functionality
-                console.log('Delete blog post');
-                alert('Blog post deleted');
-                // Redirect to all blog posts page
-                // window.location.href = 'all_blog_posts.html';
-            }
-        });
+        const deleteForm = document.getElementById('deleteBlogForm');
+        if (deleteForm) {
+            deleteForm.addEventListener('submit', function(event) {
+                if (!confirm('Are you sure you want to delete this blog post? This action cannot be undone.')) {
+                    event.preventDefault();
+                }
+            });
+        }
     </script>
 </body>
 </html>

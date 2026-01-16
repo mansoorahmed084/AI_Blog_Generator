@@ -116,6 +116,16 @@ class YouTubeBlogGenerator:
         
         # FREE APIs - Deepgram (free tier available)
         self.deepgram_api_key = os.environ.get('DEEPGRAM_API_KEY', '')
+
+        # Transcription provider selection
+        # Options: "auto" (default), "whisper", "assemblyai", "deepgram"
+        self.transcription_provider = os.environ.get('TRANSCRIPTION_PROVIDER', 'auto').strip().lower()
+        if self.transcription_provider not in {'auto', 'whisper', 'assemblyai', 'deepgram'}:
+            logger.warning(
+                "Invalid TRANSCRIPTION_PROVIDER '%s'. Falling back to 'auto'.",
+                self.transcription_provider,
+            )
+            self.transcription_provider = 'auto'
         
         # Initialize OpenAI client if API key is available
         self.openai_client = None
@@ -554,33 +564,100 @@ class YouTubeBlogGenerator:
             return None
         
         try:
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+
+            session = requests.Session()
+            retries = Retry(
+                total=3,
+                backoff_factor=0.5,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["POST", "GET"],
+            )
+            adapter = HTTPAdapter(max_retries=retries)
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+
             # Upload audio file
             upload_url = "https://api.assemblyai.com/v2/upload"
             headers = {"authorization": self.assemblyai_api_key}
             
             with open(audio_file_path, 'rb') as audio_file:
-                response = requests.post(upload_url, headers=headers, files={"file": audio_file})
-                upload_url_response = response.json().get('upload_url')
+                response = session.post(
+                    upload_url,
+                    headers=headers,
+                    files={"file": audio_file},
+                    timeout=60,
+                )
+                if not response.ok:
+                    logger.error(
+                        "AssemblyAI upload failed: status=%s body=%s",
+                        response.status_code,
+                        response.text[:500],
+                    )
+                    return None
+                try:
+                    upload_url_response = response.json().get('upload_url')
+                except ValueError:
+                    logger.error(
+                        "AssemblyAI upload returned non-JSON response: %s",
+                        response.text[:500],
+                    )
+                    return None
             
             if not upload_url_response:
+                logger.error("AssemblyAI upload missing upload_url.")
                 return None
             
             # Start transcription
             transcript_url = "https://api.assemblyai.com/v2/transcript"
-            transcript_response = requests.post(
+            transcript_response = session.post(
                 transcript_url,
                 json={"audio_url": upload_url_response},
-                headers=headers
+                headers=headers,
+                timeout=20,
             )
-            transcript_id = transcript_response.json().get('id')
+            if not transcript_response.ok:
+                logger.error(
+                    "AssemblyAI transcript request failed: status=%s body=%s",
+                    transcript_response.status_code,
+                    transcript_response.text[:500],
+                )
+                return None
+            try:
+                transcript_id = transcript_response.json().get('id')
+            except ValueError:
+                logger.error(
+                    "AssemblyAI transcript request returned non-JSON response: %s",
+                    transcript_response.text[:500],
+                )
+                return None
+            if not transcript_id:
+                logger.error("AssemblyAI transcript request missing id.")
+                return None
             
             # Poll for completion
             while True:
-                status_response = requests.get(
+                status_response = session.get(
                     f"{transcript_url}/{transcript_id}",
-                    headers=headers
+                    headers=headers,
+                    timeout=20,
                 )
-                status = status_response.json().get('status')
+                if not status_response.ok:
+                    logger.error(
+                        "AssemblyAI status poll failed: status=%s body=%s",
+                        status_response.status_code,
+                        status_response.text[:500],
+                    )
+                    return None
+                try:
+                    status = status_response.json().get('status')
+                except ValueError:
+                    logger.error(
+                        "AssemblyAI status poll returned non-JSON response: %s",
+                        status_response.text[:500],
+                    )
+                    return None
                 
                 if status == 'completed':
                     return status_response.json().get('text')
@@ -801,31 +878,38 @@ Make it engaging, informative, and suitable for a blog audience."""
                 return result
             
             try:
-                # Step 3: Transcribe audio (try FREE options first)
-                logger.info("Transcribing audio...")
+                # Step 3: Transcribe audio
+                logger.info("Transcribing audio... provider=%s", self.transcription_provider)
                 transcript = None
-                
-                # Priority 1: Local Whisper (100% FREE, no API needed)
-                # Try to use Whisper for transcription
-                try:
-                    logger.info("Trying local Whisper (FREE, no API needed)...")
+
+                if self.transcription_provider == 'whisper':
+                    logger.info("Using local Whisper (forced)...")
                     transcript = self.transcribe_audio_local_whisper(audio_file)
-                    if transcript:
-                        logger.info(f"Whisper transcription successful. Length: {len(transcript)} characters")
-                    else:
-                        logger.warning("Whisper transcription returned empty result")
-                except Exception as e:
-                    logger.error(f"Error trying Whisper: {e}", exc_info=True)
-                
-                # Priority 2: AssemblyAI (FREE tier: 5 hours/month)
-                if not transcript and self.assemblyai_api_key:
-                    print("Trying AssemblyAI (FREE tier)...")
+                elif self.transcription_provider == 'assemblyai':
+                    logger.info("Using AssemblyAI (forced)...")
                     transcript = self.transcribe_audio_assemblyai(audio_file)
-                
-                # Priority 3: Deepgram (FREE tier available)
-                if not transcript and self.deepgram_api_key:
-                    print("Trying Deepgram (FREE tier)...")
+                elif self.transcription_provider == 'deepgram':
+                    logger.info("Using Deepgram (forced)...")
                     transcript = self.transcribe_audio_deepgram(audio_file)
+                else:
+                    # auto: try free options in order
+                    try:
+                        logger.info("Trying local Whisper (FREE, no API needed)...")
+                        transcript = self.transcribe_audio_local_whisper(audio_file)
+                        if transcript:
+                            logger.info("Whisper transcription successful. Length: %s characters", len(transcript))
+                        else:
+                            logger.warning("Whisper transcription returned empty result")
+                    except Exception as e:
+                        logger.error(f"Error trying Whisper: {e}", exc_info=True)
+
+                    if not transcript and self.assemblyai_api_key:
+                        print("Trying AssemblyAI (FREE tier)...")
+                        transcript = self.transcribe_audio_assemblyai(audio_file)
+
+                    if not transcript and self.deepgram_api_key:
+                        print("Trying Deepgram (FREE tier)...")
+                        transcript = self.transcribe_audio_deepgram(audio_file)
                 
                 # Priority 4: Google Speech-to-Text (paid, but first 60 min/month free)
                 if not transcript and self.speech_client:

@@ -43,6 +43,28 @@ Generate blog posts from YouTube URLs using transcription + LLMs.
 - **Edit**: Open a blog (from **My Blog Posts** or **Blog Details**) and click **Edit**. Update title/description/content/category, then **Save Changes**.
 - **Delete**: From **My Blog Posts** or **Blog Details**, click **Delete** and confirm the prompt. The post is removed and you are redirected back to **My Blog Posts**.
 
+## Transcription Provider Switch (Local vs EB)
+
+You can force the transcription provider with an environment variable:
+
+```powershell
+# Options: auto (default), whisper, assemblyai, deepgram
+$env:TRANSCRIPTION_PROVIDER = "assemblyai"
+```
+
+Examples:
+
+- **Local Whisper** (free, local CPU):
+  ```powershell
+  $env:TRANSCRIPTION_PROVIDER = "whisper"
+  ```
+- **AssemblyAI** (recommended for EB):
+  ```powershell
+  $env:TRANSCRIPTION_PROVIDER = "assemblyai"
+  ```
+
+Restart `runserver` after changing the variable.
+
 If you see an error popup, check `backend\django.log` and the terminal output.
 
 ## Test in the Browser (AWS Elastic Beanstalk)

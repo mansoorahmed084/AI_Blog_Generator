@@ -622,7 +622,7 @@ Video Title: {video_info.get('title', 'Unknown')}
 Video Channel: {video_info.get('channel', 'Unknown')}
 
 Transcript:
-{transcript[:8000]}  # Limit transcript length
+{transcript[:12000]}  # Limit transcript length
 
 Please create:
 1. A compelling title (max 100 characters)
@@ -653,10 +653,19 @@ Make it engaging, informative, and suitable for a blog audience."""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
                     ],
-                    max_tokens=2000,
+                    max_tokens=3500,
                     temperature=0.7,
                 )
-                blog_text = response.choices[0].message.content
+                blog_text = response.choices[0].message.content or ""
+                finish_reason = getattr(response.choices[0], "finish_reason", None)
+                if finish_reason == "length":
+                    continuation = self._continue_blog_post(
+                        client=self.groq_client,
+                        model="llama-3.1-70b-versatile",
+                        system_prompt=system_prompt,
+                        partial_text=blog_text,
+                    )
+                    blog_text = self._append_continuation(blog_text, continuation)
                 return self._parse_blog_response(blog_text, video_info)
             except Exception as e:
                 print(f"Groq API error: {e}, trying next option...")
@@ -691,10 +700,19 @@ Make it engaging, informative, and suitable for a blog audience."""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
                     ],
-                    max_tokens=2000,
+                    max_tokens=3500,
                     temperature=0.7,
                 )
-                blog_text = response.choices[0].message.content
+                blog_text = response.choices[0].message.content or ""
+                finish_reason = getattr(response.choices[0], "finish_reason", None)
+                if finish_reason == "length":
+                    continuation = self._continue_blog_post(
+                        client=self.openai_client,
+                        model="gpt-3.5-turbo",
+                        system_prompt=system_prompt,
+                        partial_text=blog_text,
+                    )
+                    blog_text = self._append_continuation(blog_text, continuation)
                 return self._parse_blog_response(blog_text, video_info)
             except Exception as e:
                 print(f"OpenAI API error: {e}")
@@ -703,7 +721,7 @@ Make it engaging, informative, and suitable for a blog audience."""
         return {
             'title': video_info.get('title', 'Blog Post'),
             'description': 'A blog post generated from a YouTube video.',
-            'content': transcript[:2000] if transcript else 'Content generation requires an API key. Please set up Groq, Gemini, or OpenAI API.',
+            'content': transcript if transcript else 'Content generation requires an API key. Please set up Groq, Gemini, or OpenAI API.',
         }
     
     def _parse_blog_response(self, blog_text: str, video_info: Dict[str, str]) -> Dict[str, str]:
@@ -721,6 +739,36 @@ Make it engaging, informative, and suitable for a blog audience."""
             'description': description,
             'content': content,
         }
+
+    def _continue_blog_post(self, client, model: str, system_prompt: str, partial_text: str) -> Optional[str]:
+        """Request a continuation when the model output was cut off."""
+        try:
+            continuation_prompt = (
+                "The response was cut off. Continue ONLY the blog post content from the last sentence. "
+                "Do NOT repeat the title or description. Continue in the same style.\n\n"
+                "Partial response:\n"
+                f"{partial_text}\n\n"
+                "CONTINUATION:"
+            )
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": continuation_prompt},
+                ],
+                max_tokens=1500,
+                temperature=0.7,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.warning(f"Continuation generation failed: {e}")
+            return None
+
+    def _append_continuation(self, blog_text: str, continuation: Optional[str]) -> str:
+        """Append continuation text if present."""
+        if not continuation:
+            return blog_text
+        return f"{blog_text}\n{continuation.strip()}"
     
     def process_youtube_video(self, youtube_url: str) -> Dict[str, any]:
         """Complete pipeline: Download, transcribe, and generate blog post"""

@@ -7,8 +7,15 @@ def load_api_key():
     key_path = r"C:\temp\AI\secret keys\assemblyAI_key.txt"
     if os.path.exists(key_path):
         with open(key_path, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return os.environ.get("ASSEMBLYAI_API_KEY", "").strip()
+            raw = f.read().strip()
+    else:
+        raw = os.environ.get("ASSEMBLYAI_API_KEY", "").strip()
+
+    if "=" in raw:
+        raw = raw.split("=", 1)[1].strip()
+    if raw.startswith('"') and raw.endswith('"'):
+        raw = raw[1:-1]
+    return raw.strip()
 
 
 def main():
@@ -23,14 +30,17 @@ def main():
         return
 
     session = requests.Session()
-    headers = {"authorization": api_key}
+    headers = {
+        "authorization": api_key,
+        "content-type": "application/octet-stream",
+    }
 
     print("Uploading audio...")
     with open(audio_path, "rb") as f:
         upload_resp = session.post(
             "https://api.assemblyai.com/v2/upload",
             headers=headers,
-            files={"file": f},
+            data=f,
             timeout=60,
         )
     if not upload_resp.ok:

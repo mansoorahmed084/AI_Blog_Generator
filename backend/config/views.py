@@ -12,6 +12,18 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .models import BlogPost
 from .blog_generator import generate_blog_from_youtube
+import os
+import shutil
+
+# Try to import CAPTCHA solver (may not be available)
+try:
+    from .blog_generator import BotDetectionError
+    from .captcha_solver import solve_youtube_captcha, CAPTCHA_SOLVER_AVAILABLE
+except ImportError:
+    BotDetectionError = Exception  # Fallback
+    CAPTCHA_SOLVER_AVAILABLE = False
+    def solve_youtube_captcha(*args, **kwargs):
+        return False, None, "CAPTCHA solver not available"
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -246,15 +258,25 @@ def generate_blog(request):
                 'error': error_msg
             }, status=500)
         
+        # Check if blog_post data exists
+        blog_post_data = result.get('blog_post', {})
+        if not blog_post_data or not blog_post_data.get('title'):
+            error_msg = 'Blog post generation failed. Please check your API keys (Groq/Gemini/OpenAI).'
+            logger.error(f"Blog post data missing: {result}")
+            return JsonResponse({
+                'success': False,
+                'error': error_msg
+            }, status=500)
+        
         # Save blog post to database
         blog_post = BlogPost.objects.create(
-            title=result['blog_post']['title'],
-            description=result['blog_post']['description'],
-            content=result['blog_post']['content'],
+            title=blog_post_data.get('title', 'Untitled Blog Post'),
+            description=blog_post_data.get('description', ''),
+            content=blog_post_data.get('content', ''),
             youtube_url=youtube_url,
-            youtube_title=result['video_info'].get('title', ''),
-            youtube_channel=result['video_info'].get('channel', ''),
-            youtube_duration=result['video_info'].get('duration', ''),
+            youtube_title=result.get('video_info', {}).get('title', ''),
+            youtube_channel=result.get('video_info', {}).get('channel', ''),
+            youtube_duration=result.get('video_info', {}).get('duration', ''),
             author=request.user,
             category='Technology',  # Default category, can be made dynamic
         )
@@ -265,6 +287,18 @@ def generate_blog(request):
             'message': 'Blog post generated successfully!',
             'redirect_url': f'/blog-details/{blog_post.id}/'
         })
+    
+    except BotDetectionError as e:
+        # YouTube bot detection triggered - need user to solve CAPTCHA
+        logger.warning(f"Bot detection error: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'bot_detection': True,
+            'youtube_url': e.youtube_url,
+            'captcha_solver_available': CAPTCHA_SOLVER_AVAILABLE,
+            'message': 'YouTube detected automated access. Please solve the CAPTCHA to continue.'
+        }, status=403)
         
     except Exception as e:
         import traceback
@@ -273,6 +307,57 @@ def generate_blog(request):
         return JsonResponse({
             'success': False,
             'error': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+@login_required
+def solve_captcha(request):
+    """Handle CAPTCHA solving request"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
+    
+    youtube_url = request.POST.get('youtube_url', '').strip()
+    if not youtube_url:
+        return JsonResponse({'success': False, 'error': 'YouTube URL required'}, status=400)
+    
+    if not CAPTCHA_SOLVER_AVAILABLE:
+        return JsonResponse({
+            'success': False,
+            'error': 'CAPTCHA solver not available. Please install Playwright: pip install playwright && playwright install chromium'
+        }, status=503)
+    
+    try:
+        logger.info(f"Starting CAPTCHA solving for URL: {youtube_url}")
+        success, cookie_file, error_msg = solve_youtube_captcha(youtube_url, timeout=300)
+        
+        if success and cookie_file:
+            # Copy cookie file to persistent location
+            persistent_cookie_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cookies')
+            os.makedirs(persistent_cookie_dir, exist_ok=True)
+            persistent_cookie_file = os.path.join(persistent_cookie_dir, 'youtube_cookies.txt')
+            
+            shutil.copy2(cookie_file, persistent_cookie_file)
+            logger.info(f"Cookies saved to {persistent_cookie_file}")
+            
+            # Set environment variable for yt-dlp to use
+            os.environ['YTDLP_COOKIES_PATH'] = persistent_cookie_file
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'CAPTCHA solved successfully! Cookies saved. Please try generating the blog again.',
+                'cookie_file': persistent_cookie_file
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': error_msg or 'Failed to solve CAPTCHA'
+            }, status=500)
+    
+    except Exception as e:
+        logger.error(f"Error solving CAPTCHA: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Error solving CAPTCHA: {str(e)}'
         }, status=500)
 
 

@@ -1,4 +1,3 @@
-.ebextensions/
 .git/
 .gitignore
 __pycache__/

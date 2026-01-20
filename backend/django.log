@@ -428,3 +428,36 @@ INFO 2026-01-19 18:50:02,324 log "GET /blog-details/7/ HTTP/1.1" 200 10452
 INFO 2026-01-19 18:51:58,126 autoreload Watching for file changes with StatReloader
 INFO 2026-01-19 18:52:16,452 log "GET /blogs/ HTTP/1.1" 200 21036
 INFO 2026-01-19 18:52:17,878 log "GET /blogs/ HTTP/1.1" 200 21036
+INFO 2026-01-20 17:22:24,765 autoreload Watching for file changes with StatReloader
+INFO 2026-01-20 17:22:39,870 log "GET / HTTP/1.1" 200 22204
+INFO 2026-01-20 17:27:31,001 autoreload C:\temp\AI\AI_blog_app\backend\config\views.py changed, reloading.
+INFO 2026-01-20 17:27:33,746 autoreload Watching for file changes with StatReloader
+INFO 2026-01-20 17:28:01,151 autoreload C:\temp\AI\AI_blog_app\backend\config\blog_generator.py changed, reloading.
+INFO 2026-01-20 17:28:03,879 autoreload Watching for file changes with StatReloader
+INFO 2026-01-20 17:29:03,499 autoreload C:\temp\AI\AI_blog_app\backend\config\blog_generator.py changed, reloading.
+INFO 2026-01-20 17:29:05,261 autoreload Watching for file changes with StatReloader
+INFO 2026-01-20 17:29:38,403 autoreload C:\temp\AI\AI_blog_app\backend\config\blog_generator.py changed, reloading.
+INFO 2026-01-20 17:29:40,283 autoreload Watching for file changes with StatReloader
+INFO 2026-01-20 17:30:00,385 log "GET / HTTP/1.1" 200 24896
+INFO 2026-01-20 17:30:44,695 views Starting blog generation for URL: https://youtu.be/7j_NE6Pjv-E?si=AQA9Z8W4mVwWqDoL, use_audio_download: False
+INFO 2026-01-20 17:30:44,697 blog_generator Groq API key loaded from file: C:\temp\AI\secret keys\groq_api_key.txt
+INFO 2026-01-20 17:30:44,702 blog_generator AssemblyAI API key loaded from file: C:\temp\AI\secret keys\assemblyAI_key.txt
+DEBUG 2026-01-20 17:30:46,727 blog_generator YTDLP_COOKIES_PATH not set
+INFO 2026-01-20 17:30:54,564 blog_generator Fetching YouTube transcript directly for video ID: 7j_NE6Pjv-E
+INFO 2026-01-20 17:30:57,527 blog_generator Successfully fetched YouTube transcript (455 entries, 17070 chars)
+INFO 2026-01-20 17:31:00,747 _client HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO 2026-01-20 17:31:00,773 views Blog generation result: success=True, error=None
+INFO 2026-01-20 17:31:00,804 log "POST /generate-blog/ HTTP/1.1" 200 115
+INFO 2026-01-20 17:31:00,868 log "GET /blog-details/8/ HTTP/1.1" 200 12334
+INFO 2026-01-20 18:08:10,850 autoreload Watching for file changes with StatReloader
+INFO 2026-01-20 18:08:46,441 log "GET / HTTP/1.1" 200 16569
+INFO 2026-01-20 18:08:50,832 views Starting blog generation for URL: https://youtu.be/i53Gi_K3o7I?si=LQqBAWM207o0lPUG, use_audio_download: False
+INFO 2026-01-20 18:08:50,833 blog_generator Groq API key loaded from file: C:\temp\AI\secret keys\groq_api_key.txt
+INFO 2026-01-20 18:08:50,835 blog_generator AssemblyAI API key loaded from file: C:\temp\AI\secret keys\assemblyAI_key.txt
+INFO 2026-01-20 18:08:51,518 blog_generator Fetching YouTube transcript directly for video ID: i53Gi_K3o7I
+INFO 2026-01-20 18:08:53,208 blog_generator Successfully fetched YouTube transcript (276 entries, 10556 chars)
+INFO 2026-01-20 18:08:59,654 _client HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO 2026-01-20 18:08:59,661 views Blog generation result: success=True, error=None
+INFO 2026-01-20 18:08:59,681 log "POST /generate-blog/ HTTP/1.1" 200 115
+INFO 2026-01-20 18:08:59,731 log "GET /blog-details/9/ HTTP/1.1" 200 12614
+INFO 2026-01-20 18:09:21,724 log "GET /blogs/ HTTP/1.1" 200 26896

@@ -15,15 +15,7 @@ from .blog_generator import generate_blog_from_youtube
 import os
 import shutil
 
-# Try to import CAPTCHA solver (may not be available)
-try:
-    from .blog_generator import BotDetectionError
-    from .captcha_solver import solve_youtube_captcha, CAPTCHA_SOLVER_AVAILABLE
-except ImportError:
-    BotDetectionError = Exception  # Fallback
-    CAPTCHA_SOLVER_AVAILABLE = False
-    def solve_youtube_captcha(*args, **kwargs):
-        return False, None, "CAPTCHA solver not available"
+# CAPTCHA solver removed - using transcript API only
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -229,6 +221,7 @@ def generate_blog(request):
         return redirect('/login/?next=/generate-blog/')
     
     youtube_url = request.POST.get('youtube_url', '').strip()
+    use_audio_download = request.POST.get('use_audio_download') == 'on'  # Checkbox value
     
     if not youtube_url:
         return JsonResponse({
@@ -245,8 +238,8 @@ def generate_blog(request):
     
     try:
         # Generate blog post
-        logger.info(f"Starting blog generation for URL: {youtube_url}")
-        result = generate_blog_from_youtube(youtube_url)
+        logger.info(f"Starting blog generation for URL: {youtube_url}, use_audio_download: {use_audio_download}")
+        result = generate_blog_from_youtube(youtube_url, use_audio_download=use_audio_download)
         
         logger.info(f"Blog generation result: success={result.get('success')}, error={result.get('error')}")
         
@@ -288,18 +281,6 @@ def generate_blog(request):
             'redirect_url': f'/blog-details/{blog_post.id}/'
         })
     
-    except BotDetectionError as e:
-        # YouTube bot detection triggered - need user to solve CAPTCHA
-        logger.warning(f"Bot detection error: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'bot_detection': True,
-            'youtube_url': e.youtube_url,
-            'captcha_solver_available': CAPTCHA_SOLVER_AVAILABLE,
-            'message': 'YouTube detected automated access. Please solve the CAPTCHA to continue.'
-        }, status=403)
-        
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
@@ -310,55 +291,7 @@ def generate_blog(request):
         }, status=500)
 
 
-@login_required
-def solve_captcha(request):
-    """Handle CAPTCHA solving request"""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
-    
-    youtube_url = request.POST.get('youtube_url', '').strip()
-    if not youtube_url:
-        return JsonResponse({'success': False, 'error': 'YouTube URL required'}, status=400)
-    
-    if not CAPTCHA_SOLVER_AVAILABLE:
-        return JsonResponse({
-            'success': False,
-            'error': 'CAPTCHA solver not available. Please install Playwright: pip install playwright && playwright install chromium'
-        }, status=503)
-    
-    try:
-        logger.info(f"Starting CAPTCHA solving for URL: {youtube_url}")
-        success, cookie_file, error_msg = solve_youtube_captcha(youtube_url, timeout=300)
-        
-        if success and cookie_file:
-            # Copy cookie file to persistent location
-            persistent_cookie_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cookies')
-            os.makedirs(persistent_cookie_dir, exist_ok=True)
-            persistent_cookie_file = os.path.join(persistent_cookie_dir, 'youtube_cookies.txt')
-            
-            shutil.copy2(cookie_file, persistent_cookie_file)
-            logger.info(f"Cookies saved to {persistent_cookie_file}")
-            
-            # Set environment variable for yt-dlp to use
-            os.environ['YTDLP_COOKIES_PATH'] = persistent_cookie_file
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'CAPTCHA solved successfully! Cookies saved. Please try generating the blog again.',
-                'cookie_file': persistent_cookie_file
-            })
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': error_msg or 'Failed to solve CAPTCHA'
-            }, status=500)
-    
-    except Exception as e:
-        logger.error(f"Error solving CAPTCHA: {e}", exc_info=True)
-        return JsonResponse({
-            'success': False,
-            'error': f'Error solving CAPTCHA: {str(e)}'
-        }, status=500)
+# CAPTCHA solver removed - using transcript API only
 
 
 @login_required

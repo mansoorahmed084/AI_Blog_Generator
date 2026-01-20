@@ -27,7 +27,6 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('signup/', views.signup_view, name='signup'),
     path('generate-blog/', views.generate_blog, name='generate_blog'),
-    path('solve-captcha/', views.solve_captcha, name='solve_captcha'),
     path('test-blog-generator/', views.test_blog_generator, name='test_blog_generator'),  # Debug endpoint
     path('blogs/', views.all_blog_posts, name='all_blog_posts'),
     path('blog-details/<int:blog_id>/', views.blog_details, name='blog_details'),

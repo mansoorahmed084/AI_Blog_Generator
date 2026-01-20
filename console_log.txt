@@ -205,7 +205,7 @@ PS C:\temp\AI\AI_blog_app\backend> python -c "from django.core.management.utils 
 >> ^C
 PS C:\temp\AI\AI_blog_app\backend> python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 
-PS C:\temp\AI\AI_blog_app\backend> eb setenv SECRET_KEY= DEBUG=False
+PS C:\temp\AI\AI_blog_app\backend> eb setenv SECRET_KEY="" DEBUG=False
 2026-01-13 13:37:43    INFO    Environment update is starting.
 2026-01-13 13:37:50    INFO    Updating environment ai-blog-env's configuration settings.
 2026-01-13 13:38:11    INFO    Instance deployment used the commands in your 'Procfile' to initiate startup of your application.

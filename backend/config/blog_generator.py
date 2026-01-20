@@ -71,20 +71,11 @@ except ImportError:
         genai = None
         print("Warning: google-genai not installed. Install with: pip install google-genai (for Gemini)")
 
-# Import CAPTCHA solver
-try:
-    from config.captcha_solver import YouTubeCaptchaSolver, solve_youtube_captcha
-    CAPTCHA_SOLVER_AVAILABLE = True
-except ImportError:
-    CAPTCHA_SOLVER_AVAILABLE = False
+# CAPTCHA solver removed - using transcript API only
     logger.warning("CAPTCHA solver not available")
 
 
-class BotDetectionError(Exception):
-    """Raised when YouTube bot detection is triggered"""
-    def __init__(self, message: str, youtube_url: str):
-        super().__init__(message)
-        self.youtube_url = youtube_url
+# BotDetectionError removed - no longer needed
 
 
 class YouTubeBlogGenerator:
@@ -221,37 +212,13 @@ class YouTubeBlogGenerator:
                 return match.group(1)
         return None
 
-    def _get_yt_dlp_cookiefile(self) -> tuple[Optional[str], bool]:
-        """Return cookie file path and whether it should be deleted after use."""
-        cookie_path = os.environ.get('YTDLP_COOKIES_PATH', '').strip()
-        if cookie_path:
-            if os.path.exists(cookie_path):
-                file_size = os.path.getsize(cookie_path)
-                logger.info(f"Using yt-dlp cookies from file path: {cookie_path} (size: {file_size} bytes)")
-                return cookie_path, False
-            else:
-                logger.warning(f"YTDLP_COOKIES_PATH set to {cookie_path} but file does not exist!")
-        else:
-            logger.debug("YTDLP_COOKIES_PATH not set")
-
-        cookies_b64 = os.environ.get('YTDLP_COOKIES_B64', '').strip()
-        if cookies_b64:
-            import base64
-            try:
-                content = base64.b64decode(cookies_b64).decode('utf-8')
-                temp_dir = tempfile.mkdtemp()
-                temp_cookie_path = os.path.join(temp_dir, 'yt_cookies.txt')
-                with open(temp_cookie_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                logger.info("Using yt-dlp cookies from base64 env var.")
-                return temp_cookie_path, True
-            except Exception as e:
-                logger.warning(f"Failed to decode YTDLP_COOKIES_B64: {e}")
-
-        return None, False
+    # Cookie handling removed - using transcript API only
     
     def get_video_info(self, youtube_url: str) -> Dict[str, str]:
-        """Get video information (title, channel, duration) from YouTube"""
+        """
+        Get video information (title, channel, duration) from YouTube.
+        Note: This may fail if YouTube blocks the request. Video info is optional.
+        """
         if not yt_dlp:
             print("Error: yt-dlp is not installed. Please install it with: pip install yt-dlp")
             return {}
@@ -260,22 +227,18 @@ class YouTubeBlogGenerator:
         if not video_id:
             return {}
         
-        cookiefile, delete_cookie = self._get_yt_dlp_cookiefile()
         try:
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                # Bypass YouTube bot detection
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'extractor_args': {
                     'youtube': {
-                        'player_client': ['android', 'web'],  # Use Android client (less bot detection)
+                        'player_client': ['android', 'web'],
                     }
                 },
             }
-            if cookiefile:
-                ydl_opts['cookiefile'] = cookiefile
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(youtube_url, download=False)
@@ -287,19 +250,8 @@ class YouTubeBlogGenerator:
                     'description': info.get('description', '')[:500],  # First 500 chars
                 }
         except Exception as e:
-            error_msg = str(e)
-            # Check if this is a bot detection error
-            if 'Sign in to confirm you\'re not a bot' in error_msg or 'bot' in error_msg.lower():
-                logger.warning(f"Bot detection triggered: {error_msg}")
-                raise BotDetectionError(f"YouTube bot detection triggered: {error_msg}", youtube_url)
-            print(f"Error getting video info: {e}")
+            logger.warning(f"Could not get video info: {e}")
             return {}
-        finally:
-            if cookiefile and delete_cookie:
-                try:
-                    os.remove(cookiefile)
-                except Exception:
-                    pass
     
     def _format_duration(self, seconds: int) -> str:
         """Format duration in seconds to MM:SS or HH:MM:SS"""
@@ -362,7 +314,7 @@ class YouTubeBlogGenerator:
         if not yt_dlp:
             print("Error: yt-dlp is not installed. Please install it with: pip install yt-dlp")
             return None
-        cookiefile, delete_cookie = self._get_yt_dlp_cookiefile()
+        
         try:
             # Create temporary directory for audio
             temp_dir = tempfile.mkdtemp()
@@ -460,8 +412,6 @@ class YouTubeBlogGenerator:
                     }
                 },
             }
-            if cookiefile:
-                ydl_opts['cookiefile'] = cookiefile
             
             # If FFmpeg is available, add post-processing and location
             if ffmpeg_available and ffmpeg_path and ffprobe_path:
@@ -537,24 +487,12 @@ class YouTubeBlogGenerator:
             return audio_file
             
         except Exception as e:
-            error_msg = str(e)
-            # Check if this is a bot detection error
-            if 'Sign in to confirm you\'re not a bot' in error_msg or 'bot' in error_msg.lower():
-                logger.warning(f"Bot detection triggered during audio download: {error_msg}")
-                raise BotDetectionError(f"YouTube bot detection triggered: {error_msg}", youtube_url)
-            
             import traceback
             error_trace = traceback.format_exc()
             logger.error(f"Exception in download_audio: {str(e)}\n{error_trace}")
             print(f"Error downloading audio: {e}")
             traceback.print_exc()
             return None
-        finally:
-            if cookiefile and delete_cookie:
-                try:
-                    os.remove(cookiefile)
-                except Exception:
-                    pass
     
     def transcribe_audio(self, audio_file_path: str) -> Optional[str]:
         """Transcribe audio file using Google Speech-to-Text"""
@@ -1003,8 +941,15 @@ Make it engaging, informative, and suitable for a blog audience."""
             return blog_text
         return f"{blog_text}\n{continuation.strip()}"
     
-    def process_youtube_video(self, youtube_url: str) -> Dict[str, any]:
-        """Complete pipeline: Get transcript and generate blog post"""
+    def process_youtube_video(self, youtube_url: str, use_audio_download: bool = False) -> Dict[str, any]:
+        """
+        Complete pipeline: Get transcript and generate blog post
+        
+        Args:
+            youtube_url: YouTube video URL
+            use_audio_download: If True, download audio when transcript unavailable. 
+                               If False (default), only use YouTube transcripts.
+        """
         result = {
             'success': False,
             'error': None,
@@ -1014,85 +959,100 @@ Make it engaging, informative, and suitable for a blog audience."""
         }
         
         try:
-            # Step 1: Get video information
-            print("Fetching video information...")
-            video_info = self.get_video_info(youtube_url)
-            result['video_info'] = video_info
-            
-            if not video_info:
-                result['error'] = 'Could not fetch video information. Please check the URL.'
-                return result
-            
-            # Step 2: Try to get transcript directly from YouTube (FASTEST, NO COOKIES NEEDED!)
+            # Step 1: Try to get transcript directly from YouTube first (FASTEST, NO COOKIES NEEDED!)
+            # This works for most videos and doesn't require cookies or video info
             print("Fetching transcript directly from YouTube...")
             transcript = self.get_youtube_transcript(youtube_url)
             
-            # Step 3: If direct transcript failed, fall back to audio download + transcription
+            # Step 2: Get video information (optional - may fail if YouTube blocks the request)
+            # If video_info fails, we can still proceed with just the transcript
+            print("Fetching video information...")
+            try:
+                video_info = self.get_video_info(youtube_url)
+                result['video_info'] = video_info
+            except Exception as e:
+                # If video info fails for any reason, continue with empty video_info
+                logger.warning(f"Could not get video info: {e}, continuing with transcript only")
+                result['video_info'] = {}
+            
+            # If we don't have transcript and audio download is disabled, we need to fail
+            if not transcript and not use_audio_download:
+                result['error'] = 'Could not get transcript. This video may not have auto-generated transcripts. Enable "Advanced Options" and check "Download audio/video if transcript is unavailable" to use audio transcription instead.'
+                return result
+            
+            # Step 3: If direct transcript failed, fall back to audio download + transcription (only if enabled)
             audio_file = None
             if not transcript:
-                logger.info("Direct transcript not available, falling back to audio download + transcription")
-                print("Downloading audio...")
-                audio_file = self.download_audio(youtube_url)
-                
-                if not audio_file:
-                    error_msg = 'Could not download audio from video. Check Django logs for details.'
-                    logger.error(f"Audio download failed for URL: {youtube_url}")
-                    result['error'] = error_msg
-                    return result
-                
-                try:
-                    # Step 3: Transcribe audio
-                    logger.info("Transcribing audio... provider=%s", self.transcription_provider)
+                if use_audio_download:
+                    logger.info("Direct transcript not available, falling back to audio download + transcription")
+                    print("Downloading audio...")
+                    audio_file = self.download_audio(youtube_url)
+                    
+                    if not audio_file:
+                        error_msg = 'Could not download audio from video. Check Django logs for details.'
+                        logger.error(f"Audio download failed for URL: {youtube_url}")
+                        result['error'] = error_msg
+                        return result
+                    
+                    try:
+                        # Step 3: Transcribe audio
+                        logger.info("Transcribing audio... provider=%s", self.transcription_provider)
 
-                    if self.transcription_provider == 'whisper':
-                        logger.info("Using local Whisper (forced)...")
-                        transcript = self.transcribe_audio_local_whisper(audio_file)
-                    elif self.transcription_provider == 'assemblyai':
-                        logger.info("Using AssemblyAI (forced)...")
-                        transcript = self.transcribe_audio_assemblyai(audio_file)
-                    elif self.transcription_provider == 'deepgram':
-                        logger.info("Using Deepgram (forced)...")
-                        transcript = self.transcribe_audio_deepgram(audio_file)
-                    else:
-                        # auto: try free options in order
-                        try:
-                            logger.info("Trying local Whisper (FREE, no API needed)...")
+                        if self.transcription_provider == 'whisper':
+                            logger.info("Using local Whisper (forced)...")
                             transcript = self.transcribe_audio_local_whisper(audio_file)
-                            if transcript:
-                                logger.info("Whisper transcription successful. Length: %s characters", len(transcript))
-                            else:
-                                logger.warning("Whisper transcription returned empty result")
-                        except Exception as e:
-                            logger.error(f"Error trying Whisper: {e}", exc_info=True)
-
-                        if not transcript and self.assemblyai_api_key:
-                            print("Trying AssemblyAI (FREE tier)...")
+                        elif self.transcription_provider == 'assemblyai':
+                            logger.info("Using AssemblyAI (forced)...")
                             transcript = self.transcribe_audio_assemblyai(audio_file)
-
-                        if not transcript and self.deepgram_api_key:
-                            print("Trying Deepgram (FREE tier)...")
+                        elif self.transcription_provider == 'deepgram':
+                            logger.info("Using Deepgram (forced)...")
                             transcript = self.transcribe_audio_deepgram(audio_file)
-                    
-                    # Priority 4: Google Speech-to-Text (paid, but first 60 min/month free)
-                    if not transcript and self.speech_client:
-                        print("Trying Google Speech-to-Text...")
-                        transcript = self.transcribe_audio(audio_file)
-                    
-                    # Priority 5: OpenAI Whisper API (paid)
-                    if not transcript and self.openai_client:
-                        print("Trying OpenAI Whisper API...")
-                        transcript = self.transcribe_audio_whisper_api(audio_file)
-                finally:
-                    # Clean up temporary audio file
-                    if audio_file and os.path.exists(audio_file):
-                        try:
-                            os.unlink(audio_file)
-                        except:
-                            pass
+                        else:
+                            # auto: try free options in order
+                            try:
+                                logger.info("Trying local Whisper (FREE, no API needed)...")
+                                transcript = self.transcribe_audio_local_whisper(audio_file)
+                                if transcript:
+                                    logger.info("Whisper transcription successful. Length: %s characters", len(transcript))
+                                else:
+                                    logger.warning("Whisper transcription returned empty result")
+                            except Exception as e:
+                                logger.error(f"Error trying Whisper: {e}", exc_info=True)
+
+                            if not transcript and self.assemblyai_api_key:
+                                print("Trying AssemblyAI (FREE tier)...")
+                                transcript = self.transcribe_audio_assemblyai(audio_file)
+
+                            if not transcript and self.deepgram_api_key:
+                                print("Trying Deepgram (FREE tier)...")
+                                transcript = self.transcribe_audio_deepgram(audio_file)
+                        
+                        # Priority 4: Google Speech-to-Text (paid, but first 60 min/month free)
+                        if not transcript and self.speech_client:
+                            print("Trying Google Speech-to-Text...")
+                            transcript = self.transcribe_audio(audio_file)
+                        
+                        # Priority 5: OpenAI Whisper API (paid)
+                        if not transcript and self.openai_client:
+                            print("Trying OpenAI Whisper API...")
+                            transcript = self.transcribe_audio_whisper_api(audio_file)
+                    finally:
+                        # Clean up temporary audio file
+                        if audio_file and os.path.exists(audio_file):
+                            try:
+                                os.unlink(audio_file)
+                            except:
+                                pass
+                else:
+                    # Audio download disabled, but transcript not available
+                    logger.info("Direct transcript not available and audio download is disabled")
             
             # Step 4: Check if we have a transcript
             if not transcript:
-                result['error'] = 'Could not get transcript. Video may not have auto-generated transcripts, or transcription services are unavailable.'
+                if use_audio_download:
+                    result['error'] = 'Could not get transcript. Video may not have auto-generated transcripts, or transcription services are unavailable.'
+                else:
+                    result['error'] = 'Could not get transcript. This video may not have auto-generated transcripts. Enable "Advanced Options" and check "Download audio/video if transcript is unavailable" to use audio transcription instead.'
                 return result
             
             result['transcript'] = transcript
@@ -1116,7 +1076,14 @@ Make it engaging, informative, and suitable for a blog audience."""
 
 
 # Convenience function for Django views
-def generate_blog_from_youtube(youtube_url: str) -> Dict[str, any]:
-    """Convenience function to generate blog from YouTube URL"""
+def generate_blog_from_youtube(youtube_url: str, use_audio_download: bool = False) -> Dict[str, any]:
+    """
+    Convenience function to generate blog from YouTube URL
+    
+    Args:
+        youtube_url: YouTube video URL
+        use_audio_download: If True, download audio when transcript unavailable. 
+                           If False (default), only use YouTube transcripts.
+    """
     generator = YouTubeBlogGenerator()
-    return generator.process_youtube_video(youtube_url)
+    return generator.process_youtube_video(youtube_url, use_audio_download=use_audio_download)

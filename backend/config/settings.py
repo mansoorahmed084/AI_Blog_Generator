@@ -144,6 +144,34 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Logging configuration
+# On Elastic Beanstalk, use console-only (EB captures stdout/stderr)
+# On local development, optionally add file handler
+handlers = {
+    'console': {
+        'class': 'logging.StreamHandler',
+        'formatter': 'verbose',
+    },
+}
+
+# Only add file handler if not on EB (EB uses /var/app/current)
+is_eb = str(BASE_DIR).startswith('/var/app/')
+if not is_eb:
+    # Local development - try to add file handler
+    log_file = BASE_DIR / 'django.log'
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        # Test write
+        with open(log_file, 'a'):
+            pass
+        handlers['file'] = {
+            'class': 'logging.FileHandler',
+            'filename': str(log_file),
+            'formatter': 'verbose',
+        }
+    except (PermissionError, OSError):
+        # File logging not available, use console only
+        pass
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -153,29 +181,19 @@ LOGGING = {
             'style': '{',
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'django.log',
-            'formatter': 'verbose',
-        },
-    },
+    'handlers': handlers,
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': list(handlers.keys()),
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': list(handlers.keys()),
             'level': 'INFO',
             'propagate': False,
         },
         'config': {
-            'handlers': ['console', 'file'],
+            'handlers': list(handlers.keys()),
             'level': 'DEBUG',
             'propagate': False,
         },

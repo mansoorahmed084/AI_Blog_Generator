@@ -47,14 +47,14 @@ At line:1 char:1
 PS C:\temp\AI\AI_blog_app> pip install awsebcli^C
 PS C:\temp\AI\AI_blog_app> aws configure
 File association not found for extension .py
-AWS Access Key ID [None]: xx
-AWS Secret Access Key [None]: xx
+AWS Access Key ID [None]: 
+AWS Secret Access Key [None]: 
 Default region name [None]: `ap-south-1`
 Default output format [None]: `json`
 PS C:\temp\AI\AI_blog_app> aws configure
 File association not found for extension .py
-AWS Access Key ID [****************6YJQ]: xx
-AWS Secret Access Key [****************szly]: xx
+AWS Access Key ID [****************6YJQ]: 
+AWS Secret Access Key [****************szly]: 
 Default region name [`ap-south-1`]: ap-south-1
 Default output format [`json`]: json
 PS C:\temp\AI\AI_blog_app>
@@ -203,8 +203,9 @@ Upload Complete.
 
 PS C:\temp\AI\AI_blog_app\backend> python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())
 >> ^C
+PS C:\temp\AI\AI_blog_app\backend> python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 
-
+PS C:\temp\AI\AI_blog_app\backend> eb setenv SECRET_KEY="" DEBUG=False
 2026-01-13 13:37:43    INFO    Environment update is starting.
 2026-01-13 13:37:50    INFO    Updating environment ai-blog-env's configuration settings.
 2026-01-13 13:38:11    INFO    Instance deployment used the commands in your 'Procfile' to initiate startup of your application.

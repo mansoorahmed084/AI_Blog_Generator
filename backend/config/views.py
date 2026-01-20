@@ -12,6 +12,10 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .models import BlogPost
 from .blog_generator import generate_blog_from_youtube
+import os
+import shutil
+
+# CAPTCHA solver removed - using transcript API only
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -217,6 +221,7 @@ def generate_blog(request):
         return redirect('/login/?next=/generate-blog/')
     
     youtube_url = request.POST.get('youtube_url', '').strip()
+    use_audio_download = request.POST.get('use_audio_download') == 'on'  # Checkbox value
     
     if not youtube_url:
         return JsonResponse({
@@ -233,8 +238,8 @@ def generate_blog(request):
     
     try:
         # Generate blog post
-        logger.info(f"Starting blog generation for URL: {youtube_url}")
-        result = generate_blog_from_youtube(youtube_url)
+        logger.info(f"Starting blog generation for URL: {youtube_url}, use_audio_download: {use_audio_download}")
+        result = generate_blog_from_youtube(youtube_url, use_audio_download=use_audio_download)
         
         logger.info(f"Blog generation result: success={result.get('success')}, error={result.get('error')}")
         
@@ -246,15 +251,25 @@ def generate_blog(request):
                 'error': error_msg
             }, status=500)
         
+        # Check if blog_post data exists
+        blog_post_data = result.get('blog_post', {})
+        if not blog_post_data or not blog_post_data.get('title'):
+            error_msg = 'Blog post generation failed. Please check your API keys (Groq/Gemini/OpenAI).'
+            logger.error(f"Blog post data missing: {result}")
+            return JsonResponse({
+                'success': False,
+                'error': error_msg
+            }, status=500)
+        
         # Save blog post to database
         blog_post = BlogPost.objects.create(
-            title=result['blog_post']['title'],
-            description=result['blog_post']['description'],
-            content=result['blog_post']['content'],
+            title=blog_post_data.get('title', 'Untitled Blog Post'),
+            description=blog_post_data.get('description', ''),
+            content=blog_post_data.get('content', ''),
             youtube_url=youtube_url,
-            youtube_title=result['video_info'].get('title', ''),
-            youtube_channel=result['video_info'].get('channel', ''),
-            youtube_duration=result['video_info'].get('duration', ''),
+            youtube_title=result.get('video_info', {}).get('title', ''),
+            youtube_channel=result.get('video_info', {}).get('channel', ''),
+            youtube_duration=result.get('video_info', {}).get('duration', ''),
             author=request.user,
             category='Technology',  # Default category, can be made dynamic
         )
@@ -265,7 +280,7 @@ def generate_blog(request):
             'message': 'Blog post generated successfully!',
             'redirect_url': f'/blog-details/{blog_post.id}/'
         })
-        
+    
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
@@ -274,6 +289,9 @@ def generate_blog(request):
             'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=500)
+
+
+# CAPTCHA solver removed - using transcript API only
 
 
 @login_required

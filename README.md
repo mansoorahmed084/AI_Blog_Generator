@@ -86,9 +86,44 @@ cd C:\temp\AI\AI_blog_app\backend
 eb logs
 ```
 
+## How It Works
+
+The app uses a **smart two-step approach** to get video transcripts:
+
+1. **Direct YouTube Transcript API** (preferred, fastest):
+   - Fetches transcripts directly from YouTube (like [youtube-transcript.io](https://www.youtube-transcript.io/))
+   - **No cookies needed** - avoids bot detection entirely!
+   - Works for videos with auto-generated or manual transcripts
+   - Instant results (no audio download required)
+
+2. **Audio Download + Transcription** (fallback):
+   - If direct transcript isn't available, downloads audio using `yt-dlp`
+   - Transcribes using free APIs (AssemblyAI, Deepgram) or local Whisper
+   - Requires cookies for bot detection bypass (see `YOUTUBE_BOT_DETECTION_FIX.md`)
+
+## CAPTCHA Solving (Bot Detection)
+
+When YouTube detects automated access, the app provides interactive CAPTCHA solving:
+
+1. **Modal appears** asking to verify you're human
+2. **Browser opens** automatically (Playwright)
+3. **Solve CAPTCHA** in the browser window
+4. **Cookies captured** automatically
+5. **Blog generation retries** with saved cookies
+
+**Testing:** See `backend\TESTING_CAPTCHA_SOLVING.md` for detailed local and EC2 testing instructions.
+
+**Installation (Local):**
+```powershell
+pip install playwright
+playwright install chromium
+```
+
 ## Common Issues
 
-- **YouTube bot detection**: If YouTube blocks downloads, see `backend\YOUTUBE_BOT_DETECTION_FIX.md`.
+- **YouTube bot detection**: The app now tries direct transcript API first (no cookies needed!). If that fails and audio download is needed, see `backend\YOUTUBE_BOT_DETECTION_FIX.md` or use the CAPTCHA solving feature.
+- **CAPTCHA solving**: See `backend\TESTING_CAPTCHA_SOLVING.md` for testing instructions.
+- **No transcript available**: Some videos don't have transcripts. The app will automatically fall back to audio download + transcription.
 - **FFmpeg missing**: For local audio conversion, install FFmpeg (see `backend\INSTALL_FFMPEG.md`).
 - **API keys**: For free APIs, see `backend\FREE_API_SETUP.md`.
 

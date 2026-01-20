@@ -95,7 +95,7 @@
             {% endif %}
             <form id="blogGenerationForm" method="POST" action="{% url 'generate_blog' %}">
                 {% csrf_token %}
-                <div class="flex space-x-4">
+                <div class="flex space-x-4 mb-3">
                     <input 
                         id="youtubelink" 
                         name="youtube_url"
@@ -112,6 +112,38 @@
                         Generate Blog
                     </button>
                 </div>
+                
+                <!-- Advanced Options Toggle -->
+                <div class="mb-3">
+                    <button 
+                        type="button"
+                        id="advancedToggle"
+                        class="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center"
+                    >
+                        <span id="advancedToggleIcon" class="mr-1">▶</span>
+                        <span>Advanced Options</span>
+                    </button>
+                </div>
+                
+                <!-- Advanced Options Panel (Hidden by default) -->
+                <div id="advancedOptions" class="hidden bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                    <div class="space-y-3">
+                        <div class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                id="useAudioDownload"
+                                name="use_audio_download"
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            >
+                            <label for="useAudioDownload" class="ml-2 text-sm text-gray-700">
+                                Download audio/video if transcript is unavailable
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-500 ml-6">
+                            By default, we use YouTube's built-in transcripts (fastest). Enable this to download and transcribe audio when transcripts aren't available.
+                        </p>
+                    </div>
+                </div>
             </form>
         </div>
 
@@ -125,7 +157,18 @@
     </div>
 
     <footer class="text-center p-4 text-black mt-6">
-        Powered by <a href="#" class="text-blue-600 hover:underline">MansoorAhmed084</a>
+        <p class="text-sm text-gray-600 font-medium mb-2">Powered by:</p>
+        <div class="flex flex-wrap justify-center gap-2 text-xs text-gray-500">
+            <span class="px-2 py-1 bg-blue-50 rounded">Django</span>
+            <span class="px-2 py-1 bg-green-50 rounded">Groq</span>
+            <span class="px-2 py-1 bg-purple-50 rounded">Gemini</span>
+            <span class="px-2 py-1 bg-orange-50 rounded">AssemblyAI</span>
+            <span class="px-2 py-1 bg-red-50 rounded">YouTube API</span>
+            <span class="px-2 py-1 bg-yellow-50 rounded">yt-dlp</span>
+            <span class="px-2 py-1 bg-indigo-50 rounded">Playwright</span>
+            <span class="px-2 py-1 bg-pink-50 rounded">Whisper</span>
+            <span class="px-2 py-1 bg-teal-50 rounded">Tailwind CSS</span>
+        </div>
     </footer>
 
     <!-- Loading Spinner Overlay - MUST be outside main content for fixed positioning -->
@@ -155,6 +198,26 @@
                 overlay.classList.add('hidden');
             }
         }
+        
+        // Handle Advanced Options Toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const advancedToggle = document.getElementById('advancedToggle');
+            const advancedOptions = document.getElementById('advancedOptions');
+            const advancedToggleIcon = document.getElementById('advancedToggleIcon');
+            
+            if (advancedToggle && advancedOptions) {
+                advancedToggle.addEventListener('click', function() {
+                    const isHidden = advancedOptions.classList.contains('hidden');
+                    if (isHidden) {
+                        advancedOptions.classList.remove('hidden');
+                        advancedToggleIcon.textContent = '▼';
+                    } else {
+                        advancedOptions.classList.add('hidden');
+                        advancedToggleIcon.textContent = '▶';
+                    }
+                });
+            }
+        });
         
         // Handle blog generation form submission
         document.addEventListener('DOMContentLoaded', function() {
@@ -252,15 +315,23 @@
                             // Success - redirect to blog details page
                             window.location.href = data.redirect_url;
                         } else {
-                            // Error - show message
-                            hideLoading();
-                            generateButton.disabled = false;
-                            generateButton.textContent = 'Generate Blog';
-                            if (data.login_required) {
-                                alert('Please log in to generate blog posts. Redirecting to login page...');
-                                window.location.href = data.login_url || '/login/';
+                            // Check if bot detection error
+                            if (data.bot_detection) {
+                                hideLoading();
+                                generateButton.disabled = false;
+                                generateButton.textContent = 'Generate Blog';
+                                // CAPTCHA handling removed - using transcript API only
                             } else {
-                                alert('Error: ' + (data.error || 'Failed to generate blog post'));
+                                // Other error - show message
+                                hideLoading();
+                                generateButton.disabled = false;
+                                generateButton.textContent = 'Generate Blog';
+                                if (data.login_required) {
+                                    alert('Please log in to generate blog posts. Redirecting to login page...');
+                                    window.location.href = data.login_url || '/login/';
+                                } else {
+                                    alert('Error: ' + (data.error || 'Failed to generate blog post'));
+                                }
                             }
                         }
                     } catch (error) {
@@ -288,6 +359,8 @@
                 });
             }
         });
+        
+        // CAPTCHA handling removed - using transcript API only
     </script>
 
 </body>

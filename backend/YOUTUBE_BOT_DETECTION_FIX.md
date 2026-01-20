@@ -26,15 +26,35 @@ If YouTube still blocks requests, try these alternatives:
 
 ### Option 1: Use Cookies (Most Reliable)
 1. Export YouTube cookies from your browser
-2. Save cookies file to EC2 instance
-3. Update `blog_generator.py` to use cookies:
+2. Save cookies file or set it as base64 in EB environment variables
+3. Configure `yt-dlp` to use cookies via env vars
 
-```python
-ydl_opts = {
-    # ... other options ...
-    'cookiefile': '/path/to/cookies.txt',
-}
+#### Export cookies (Chrome/Edge)
+1. Install the extension **"Get cookies.txt LOCALLY"** or **"cookies.txt"**.
+2. Go to `youtube.com` and ensure you are logged in.
+3. Export cookies for YouTube and save as `cookies.txt`.
+
+#### Local usage
+Set the cookie file path:
+```powershell
+$env:YTDLP_COOKIES_PATH="C:\path\to\cookies.txt"
 ```
+
+#### EB usage (automatic)
+1. Base64 encode your `cookies.txt`:
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\cookies.txt"))
+```
+2. Set EB environment variable:
+```powershell
+eb setenv YTDLP_COOKIES_B64="<base64 string>"
+```
+3. Deploy:
+```powershell
+eb deploy
+```
+
+EB will create `/var/app/current/cookies.txt` automatically during deploy.
 
 ### Option 2: Try Different Client
 Update `extractor_args` to use different clients:

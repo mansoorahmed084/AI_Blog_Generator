@@ -6,6 +6,8 @@ gunicorn==23.0.0
 
 # YouTube and Audio Processing
 yt-dlp>=2023.12.30
+youtube-transcript-api>=0.6.0  # Direct YouTube transcript extraction (no cookies needed!)
+playwright>=1.40.0  # For CAPTCHA solving - opens browser for user interaction
 ffmpeg-python>=0.2.0  # Python wrapper for FFmpeg (FFmpeg binary must be installed separately)
 
 # NOTE: FFmpeg is NOT a Python package - it must be installed separately

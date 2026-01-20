@@ -50,6 +50,18 @@ except ImportError:
     print("Warning: requests not installed. Install with: pip install requests")
 
 try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
+    YOUTUBE_TRANSCRIPT_AVAILABLE = True
+except ImportError:
+    YouTubeTranscriptApi = None
+    TranscriptsDisabled = None
+    NoTranscriptFound = None
+    VideoUnavailable = None
+    YOUTUBE_TRANSCRIPT_AVAILABLE = False
+    print("Warning: youtube-transcript-api not installed. Install with: pip install youtube-transcript-api")
+
+try:
     import google.genai as genai
 except ImportError:
     try:
@@ -58,6 +70,12 @@ except ImportError:
     except ImportError:
         genai = None
         print("Warning: google-genai not installed. Install with: pip install google-genai (for Gemini)")
+
+# CAPTCHA solver removed - using transcript API only
+    logger.warning("CAPTCHA solver not available")
+
+
+# BotDetectionError removed - no longer needed
 
 
 class YouTubeBlogGenerator:
@@ -103,15 +121,25 @@ class YouTubeBlogGenerator:
         if os.path.exists(assemblyai_key_file):
             try:
                 with open(assemblyai_key_file, 'r', encoding='utf-8') as f:
-                    self.assemblyai_api_key = f.read().strip()
+                    raw_key = f.read().strip()
+                if '=' in raw_key:
+                    raw_key = raw_key.split('=', 1)[1].strip()
+                if raw_key.startswith('"') and raw_key.endswith('"'):
+                    raw_key = raw_key[1:-1]
+                self.assemblyai_api_key = raw_key.strip()
                 logger.info(f"AssemblyAI API key loaded from file: {assemblyai_key_file}")
             except Exception as e:
                 logger.warning(f"Could not read AssemblyAI API key from file: {e}")
         
         # Fallback to environment variable (works on EC2/cloud)
         if not self.assemblyai_api_key:
-            self.assemblyai_api_key = os.environ.get('ASSEMBLYAI_API_KEY', '')
-            if self.assemblyai_api_key:
+            raw_env_key = os.environ.get('ASSEMBLYAI_API_KEY', '')
+            if raw_env_key:
+                if '=' in raw_env_key:
+                    raw_env_key = raw_env_key.split('=', 1)[1].strip()
+                if raw_env_key.startswith('"') and raw_env_key.endswith('"'):
+                    raw_env_key = raw_env_key[1:-1]
+                self.assemblyai_api_key = raw_env_key.strip()
                 logger.info("AssemblyAI API key loaded from environment variable")
         
         # FREE APIs - Deepgram (free tier available)
@@ -183,9 +211,14 @@ class YouTubeBlogGenerator:
             if match:
                 return match.group(1)
         return None
+
+    # Cookie handling removed - using transcript API only
     
     def get_video_info(self, youtube_url: str) -> Dict[str, str]:
-        """Get video information (title, channel, duration) from YouTube"""
+        """
+        Get video information (title, channel, duration) from YouTube.
+        Note: This may fail if YouTube blocks the request. Video info is optional.
+        """
         if not yt_dlp:
             print("Error: yt-dlp is not installed. Please install it with: pip install yt-dlp")
             return {}
@@ -199,11 +232,10 @@ class YouTubeBlogGenerator:
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                # Bypass YouTube bot detection
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'extractor_args': {
                     'youtube': {
-                        'player_client': ['android', 'web'],  # Use Android client (less bot detection)
+                        'player_client': ['android', 'web'],
                     }
                 },
             }
@@ -218,7 +250,7 @@ class YouTubeBlogGenerator:
                     'description': info.get('description', '')[:500],  # First 500 chars
                 }
         except Exception as e:
-            print(f"Error getting video info: {e}")
+            logger.warning(f"Could not get video info: {e}")
             return {}
     
     def _format_duration(self, seconds: int) -> str:
@@ -233,6 +265,49 @@ class YouTubeBlogGenerator:
         if hours > 0:
             return f"{hours}:{minutes:02d}:{secs:02d}"
         return f"{minutes}:{secs:02d}"
+    
+    def get_youtube_transcript(self, youtube_url: str) -> Optional[str]:
+        """
+        Fetch transcript directly from YouTube using youtube-transcript-api.
+        This avoids bot detection and cookie issues - works like youtube-transcript.io!
+        Returns the transcript text or None if not available.
+        """
+        if not YOUTUBE_TRANSCRIPT_AVAILABLE or not YouTubeTranscriptApi:
+            logger.warning("youtube-transcript-api not available. Install with: pip install youtube-transcript-api")
+            return None
+        
+        video_id = self.extract_video_id(youtube_url)
+        if not video_id:
+            logger.error(f"Could not extract video ID from URL: {youtube_url}")
+            return None
+        
+        try:
+            logger.info(f"Fetching YouTube transcript directly for video ID: {video_id}")
+            # Create instance and fetch transcript
+            api = YouTubeTranscriptApi()
+            transcript = api.fetch(
+                video_id,
+                languages=['en', 'en-US', 'en-GB']  # Try English variants first
+            )
+            
+            # Combine all transcript entries into a single text
+            # transcript is iterable and contains snippets with .text attribute
+            transcript_text = ' '.join([snippet.text for snippet in transcript])
+            logger.info(f"Successfully fetched YouTube transcript ({len(transcript)} entries, {len(transcript_text)} chars)")
+            return transcript_text
+            
+        except TranscriptsDisabled:
+            logger.warning(f"Transcripts are disabled for video {video_id}")
+            return None
+        except NoTranscriptFound:
+            logger.warning(f"No transcript found for video {video_id}. Video may not have auto-generated transcripts.")
+            return None
+        except VideoUnavailable:
+            logger.error(f"Video {video_id} is unavailable")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching YouTube transcript: {e}")
+            return None
     
     def download_audio(self, youtube_url: str) -> Optional[str]:
         """Download audio from YouTube video and return temporary file path"""
@@ -580,13 +655,16 @@ class YouTubeBlogGenerator:
 
             # Upload audio file
             upload_url = "https://api.assemblyai.com/v2/upload"
-            headers = {"authorization": self.assemblyai_api_key}
+            headers = {
+                "authorization": self.assemblyai_api_key,
+                "content-type": "application/octet-stream",
+            }
             
             with open(audio_file_path, 'rb') as audio_file:
                 response = session.post(
                     upload_url,
                     headers=headers,
-                    files={"file": audio_file},
+                    data=audio_file,
                     timeout=60,
                 )
                 if not response.ok:
@@ -722,30 +800,46 @@ Make it engaging, informative, and suitable for a blog audience."""
         
         # Try FREE Groq API first (very fast, free tier)
         if self.groq_client:
-            try:
-                print("Generating blog post with Groq (FREE)...")
-                response = self.groq_client.chat.completions.create(
-                    model="llama-3.1-70b-versatile",  # or "mixtral-8x7b-32768"
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=3500,
-                    temperature=0.7,
-                )
-                blog_text = response.choices[0].message.content or ""
-                finish_reason = getattr(response.choices[0], "finish_reason", None)
-                if finish_reason == "length":
-                    continuation = self._continue_blog_post(
-                        client=self.groq_client,
-                        model="llama-3.1-70b-versatile",
-                        system_prompt=system_prompt,
-                        partial_text=blog_text,
+            # Try models in order of preference (newest first, with fallbacks)
+            groq_models = [
+                "llama-3.3-70b-versatile",  # Latest model
+                "llama-3.1-8b-instant",     # Fast alternative
+                "mixtral-8x7b-32768",       # Alternative option
+            ]
+            
+            for model_name in groq_models:
+                try:
+                    print(f"Generating blog post with Groq (FREE) using {model_name}...")
+                    response = self.groq_client.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=3500,
+                        temperature=0.7,
                     )
-                    blog_text = self._append_continuation(blog_text, continuation)
-                return self._parse_blog_response(blog_text, video_info)
-            except Exception as e:
-                print(f"Groq API error: {e}, trying next option...")
+                    blog_text = response.choices[0].message.content or ""
+                    finish_reason = getattr(response.choices[0], "finish_reason", None)
+                    if finish_reason == "length":
+                        continuation = self._continue_blog_post(
+                            client=self.groq_client,
+                            model=model_name,
+                            system_prompt=system_prompt,
+                            partial_text=blog_text,
+                        )
+                        blog_text = self._append_continuation(blog_text, continuation)
+                    return self._parse_blog_response(blog_text, video_info)
+                except Exception as e:
+                    error_msg = str(e)
+                    # If model is decommissioned or not found, try next model
+                    if "decommissioned" in error_msg.lower() or "not found" in error_msg.lower() or "invalid" in error_msg.lower():
+                        print(f"Groq model {model_name} not available: {e}, trying next model...")
+                        continue
+                    else:
+                        # Other errors (rate limit, etc.) - try next option entirely
+                        print(f"Groq API error: {e}, trying next option...")
+                        break
         
         # Try FREE Gemini API
         if self.gemini_client:
@@ -847,8 +941,15 @@ Make it engaging, informative, and suitable for a blog audience."""
             return blog_text
         return f"{blog_text}\n{continuation.strip()}"
     
-    def process_youtube_video(self, youtube_url: str) -> Dict[str, any]:
-        """Complete pipeline: Download, transcribe, and generate blog post"""
+    def process_youtube_video(self, youtube_url: str, use_audio_download: bool = False) -> Dict[str, any]:
+        """
+        Complete pipeline: Get transcript and generate blog post
+        
+        Args:
+            youtube_url: YouTube video URL
+            use_audio_download: If True, download audio when transcript unavailable. 
+                               If False (default), only use YouTube transcripts.
+        """
         result = {
             'success': False,
             'error': None,
@@ -858,89 +959,110 @@ Make it engaging, informative, and suitable for a blog audience."""
         }
         
         try:
-            # Step 1: Get video information
+            # Step 1: Try to get transcript directly from YouTube first (FASTEST, NO COOKIES NEEDED!)
+            # This works for most videos and doesn't require cookies or video info
+            print("Fetching transcript directly from YouTube...")
+            transcript = self.get_youtube_transcript(youtube_url)
+            
+            # Step 2: Get video information (optional - may fail if YouTube blocks the request)
+            # If video_info fails, we can still proceed with just the transcript
             print("Fetching video information...")
-            video_info = self.get_video_info(youtube_url)
-            result['video_info'] = video_info
-            
-            if not video_info:
-                result['error'] = 'Could not fetch video information. Please check the URL.'
-                return result
-            
-            # Step 2: Download audio
-            print("Downloading audio...")
-            audio_file = self.download_audio(youtube_url)
-            
-            if not audio_file:
-                error_msg = 'Could not download audio from video. Check Django logs for details.'
-                logger.error(f"Audio download failed for URL: {youtube_url}")
-                result['error'] = error_msg
-                return result
-            
             try:
-                # Step 3: Transcribe audio
-                logger.info("Transcribing audio... provider=%s", self.transcription_provider)
-                transcript = None
-
-                if self.transcription_provider == 'whisper':
-                    logger.info("Using local Whisper (forced)...")
-                    transcript = self.transcribe_audio_local_whisper(audio_file)
-                elif self.transcription_provider == 'assemblyai':
-                    logger.info("Using AssemblyAI (forced)...")
-                    transcript = self.transcribe_audio_assemblyai(audio_file)
-                elif self.transcription_provider == 'deepgram':
-                    logger.info("Using Deepgram (forced)...")
-                    transcript = self.transcribe_audio_deepgram(audio_file)
-                else:
-                    # auto: try free options in order
+                video_info = self.get_video_info(youtube_url)
+                result['video_info'] = video_info
+            except Exception as e:
+                # If video info fails for any reason, continue with empty video_info
+                logger.warning(f"Could not get video info: {e}, continuing with transcript only")
+                result['video_info'] = {}
+            
+            # If we don't have transcript and audio download is disabled, we need to fail
+            if not transcript and not use_audio_download:
+                result['error'] = 'Could not get transcript. This video may not have auto-generated transcripts. Enable "Advanced Options" and check "Download audio/video if transcript is unavailable" to use audio transcription instead.'
+                return result
+            
+            # Step 3: If direct transcript failed, fall back to audio download + transcription (only if enabled)
+            audio_file = None
+            if not transcript:
+                if use_audio_download:
+                    logger.info("Direct transcript not available, falling back to audio download + transcription")
+                    print("Downloading audio...")
+                    audio_file = self.download_audio(youtube_url)
+                    
+                    if not audio_file:
+                        error_msg = 'Could not download audio from video. Check Django logs for details.'
+                        logger.error(f"Audio download failed for URL: {youtube_url}")
+                        result['error'] = error_msg
+                        return result
+                    
                     try:
-                        logger.info("Trying local Whisper (FREE, no API needed)...")
-                        transcript = self.transcribe_audio_local_whisper(audio_file)
-                        if transcript:
-                            logger.info("Whisper transcription successful. Length: %s characters", len(transcript))
+                        # Step 3: Transcribe audio
+                        logger.info("Transcribing audio... provider=%s", self.transcription_provider)
+
+                        if self.transcription_provider == 'whisper':
+                            logger.info("Using local Whisper (forced)...")
+                            transcript = self.transcribe_audio_local_whisper(audio_file)
+                        elif self.transcription_provider == 'assemblyai':
+                            logger.info("Using AssemblyAI (forced)...")
+                            transcript = self.transcribe_audio_assemblyai(audio_file)
+                        elif self.transcription_provider == 'deepgram':
+                            logger.info("Using Deepgram (forced)...")
+                            transcript = self.transcribe_audio_deepgram(audio_file)
                         else:
-                            logger.warning("Whisper transcription returned empty result")
-                    except Exception as e:
-                        logger.error(f"Error trying Whisper: {e}", exc_info=True)
+                            # auto: try free options in order
+                            try:
+                                logger.info("Trying local Whisper (FREE, no API needed)...")
+                                transcript = self.transcribe_audio_local_whisper(audio_file)
+                                if transcript:
+                                    logger.info("Whisper transcription successful. Length: %s characters", len(transcript))
+                                else:
+                                    logger.warning("Whisper transcription returned empty result")
+                            except Exception as e:
+                                logger.error(f"Error trying Whisper: {e}", exc_info=True)
 
-                    if not transcript and self.assemblyai_api_key:
-                        print("Trying AssemblyAI (FREE tier)...")
-                        transcript = self.transcribe_audio_assemblyai(audio_file)
+                            if not transcript and self.assemblyai_api_key:
+                                print("Trying AssemblyAI (FREE tier)...")
+                                transcript = self.transcribe_audio_assemblyai(audio_file)
 
-                    if not transcript and self.deepgram_api_key:
-                        print("Trying Deepgram (FREE tier)...")
-                        transcript = self.transcribe_audio_deepgram(audio_file)
-                
-                # Priority 4: Google Speech-to-Text (paid, but first 60 min/month free)
-                if not transcript and self.speech_client:
-                    print("Trying Google Speech-to-Text...")
-                    transcript = self.transcribe_audio(audio_file)
-                
-                # Priority 5: OpenAI Whisper API (paid)
-                if not transcript and self.openai_client:
-                    print("Trying OpenAI Whisper API...")
-                    transcript = self.transcribe_audio_whisper_api(audio_file)
-                
-                if not transcript:
-                    result['error'] = 'Could not transcribe audio. Please install local Whisper (pip install openai-whisper) or set up API credentials.'
-                    return result
-                
-                result['transcript'] = transcript
-                
-                # Step 4: Generate blog post
-                print("Generating blog post...")
-                blog_post = self.generate_blog_post(transcript, video_info)
-                result['blog_post'] = blog_post
-                
-                result['success'] = True
-                
-            finally:
-                # Clean up temporary audio file
-                if os.path.exists(audio_file):
-                    try:
-                        os.unlink(audio_file)
-                    except:
-                        pass
+                            if not transcript and self.deepgram_api_key:
+                                print("Trying Deepgram (FREE tier)...")
+                                transcript = self.transcribe_audio_deepgram(audio_file)
+                        
+                        # Priority 4: Google Speech-to-Text (paid, but first 60 min/month free)
+                        if not transcript and self.speech_client:
+                            print("Trying Google Speech-to-Text...")
+                            transcript = self.transcribe_audio(audio_file)
+                        
+                        # Priority 5: OpenAI Whisper API (paid)
+                        if not transcript and self.openai_client:
+                            print("Trying OpenAI Whisper API...")
+                            transcript = self.transcribe_audio_whisper_api(audio_file)
+                    finally:
+                        # Clean up temporary audio file
+                        if audio_file and os.path.exists(audio_file):
+                            try:
+                                os.unlink(audio_file)
+                            except:
+                                pass
+                else:
+                    # Audio download disabled, but transcript not available
+                    logger.info("Direct transcript not available and audio download is disabled")
+            
+            # Step 4: Check if we have a transcript
+            if not transcript:
+                if use_audio_download:
+                    result['error'] = 'Could not get transcript. Video may not have auto-generated transcripts, or transcription services are unavailable.'
+                else:
+                    result['error'] = 'Could not get transcript. This video may not have auto-generated transcripts. Enable "Advanced Options" and check "Download audio/video if transcript is unavailable" to use audio transcription instead.'
+                return result
+            
+            result['transcript'] = transcript
+            
+            # Step 5: Generate blog post
+            print("Generating blog post...")
+            blog_post = self.generate_blog_post(transcript, video_info)
+            result['blog_post'] = blog_post
+            
+            result['success'] = True
             
         except Exception as e:
             import traceback
@@ -954,7 +1076,14 @@ Make it engaging, informative, and suitable for a blog audience."""
 
 
 # Convenience function for Django views
-def generate_blog_from_youtube(youtube_url: str) -> Dict[str, any]:
-    """Convenience function to generate blog from YouTube URL"""
+def generate_blog_from_youtube(youtube_url: str, use_audio_download: bool = False) -> Dict[str, any]:
+    """
+    Convenience function to generate blog from YouTube URL
+    
+    Args:
+        youtube_url: YouTube video URL
+        use_audio_download: If True, download audio when transcript unavailable. 
+                           If False (default), only use YouTube transcripts.
+    """
     generator = YouTubeBlogGenerator()
-    return generator.process_youtube_video(youtube_url)
+    return generator.process_youtube_video(youtube_url, use_audio_download=use_audio_download)

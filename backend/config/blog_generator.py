@@ -51,13 +51,21 @@ except ImportError:
 
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
-    from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
+    from youtube_transcript_api._errors import (
+        TranscriptsDisabled, 
+        NoTranscriptFound, 
+        VideoUnavailable,
+        RequestBlocked,
+        IPBlocked
+    )
     YOUTUBE_TRANSCRIPT_AVAILABLE = True
 except ImportError:
     YouTubeTranscriptApi = None
     TranscriptsDisabled = None
     NoTranscriptFound = None
     VideoUnavailable = None
+    RequestBlocked = None
+    IPBlocked = None
     YOUTUBE_TRANSCRIPT_AVAILABLE = False
     print("Warning: youtube-transcript-api not installed. Install with: pip install youtube-transcript-api")
 
@@ -266,20 +274,24 @@ class YouTubeBlogGenerator:
             return f"{hours}:{minutes:02d}:{secs:02d}"
         return f"{minutes}:{secs:02d}"
     
-    def get_youtube_transcript(self, youtube_url: str) -> Optional[str]:
+    def get_youtube_transcript(self, youtube_url: str) -> tuple[Optional[str], Optional[str]]:
         """
         Fetch transcript directly from YouTube using youtube-transcript-api.
         This avoids bot detection and cookie issues - works like youtube-transcript.io!
-        Returns the transcript text or None if not available.
+        
+        Returns:
+            Tuple of (transcript_text, error_type)
+            - transcript_text: The transcript text if successful, None otherwise
+            - error_type: 'ip_blocked' if IP is blocked, 'no_transcript' if transcript unavailable, None if successful
         """
         if not YOUTUBE_TRANSCRIPT_AVAILABLE or not YouTubeTranscriptApi:
             logger.warning("youtube-transcript-api not available. Install with: pip install youtube-transcript-api")
-            return None
+            return None, None
         
         video_id = self.extract_video_id(youtube_url)
         if not video_id:
             logger.error(f"Could not extract video ID from URL: {youtube_url}")
-            return None
+            return None, None
         
         try:
             logger.info(f"Fetching YouTube transcript directly for video ID: {video_id}")
@@ -294,20 +306,31 @@ class YouTubeBlogGenerator:
             # transcript is iterable and contains snippets with .text attribute
             transcript_text = ' '.join([snippet.text for snippet in transcript])
             logger.info(f"Successfully fetched YouTube transcript ({len(transcript)} entries, {len(transcript_text)} chars)")
-            return transcript_text
+            return transcript_text, None
             
-        except TranscriptsDisabled:
-            logger.warning(f"Transcripts are disabled for video {video_id}")
-            return None
-        except NoTranscriptFound:
-            logger.warning(f"No transcript found for video {video_id}. Video may not have auto-generated transcripts.")
-            return None
-        except VideoUnavailable:
-            logger.error(f"Video {video_id} is unavailable")
-            return None
         except Exception as e:
-            logger.error(f"Error fetching YouTube transcript: {e}")
-            return None
+            error_msg = str(e)
+            # Check for IP blocking errors
+            if (RequestBlocked and isinstance(e, RequestBlocked)) or (IPBlocked and isinstance(e, IPBlocked)):
+                logger.error(f"YouTube is blocking requests from this IP (cloud provider): {error_msg}")
+                return None, 'ip_blocked'
+            # Check if error message indicates IP blocking
+            elif 'blocking' in error_msg.lower() or 'cloud provider' in error_msg.lower() or 'ip' in error_msg.lower() and 'block' in error_msg.lower():
+                logger.error(f"YouTube is blocking requests from this IP: {error_msg}")
+                return None, 'ip_blocked'
+            # Handle other specific exceptions
+            elif TranscriptsDisabled and isinstance(e, TranscriptsDisabled):
+                logger.warning(f"Transcripts are disabled for video {video_id}")
+                return None, 'no_transcript'
+            elif NoTranscriptFound and isinstance(e, NoTranscriptFound):
+                logger.warning(f"No transcript found for video {video_id}. Video may not have auto-generated transcripts.")
+                return None, 'no_transcript'
+            elif VideoUnavailable and isinstance(e, VideoUnavailable):
+                logger.error(f"Video {video_id} is unavailable")
+                return None, 'no_transcript'
+            else:
+                logger.error(f"Error fetching YouTube transcript: {error_msg}")
+                return None, 'no_transcript'
     
     def download_audio(self, youtube_url: str) -> Optional[str]:
         """Download audio from YouTube video and return temporary file path"""
@@ -962,7 +985,7 @@ Make it engaging, informative, and suitable for a blog audience."""
             # Step 1: Try to get transcript directly from YouTube first (FASTEST, NO COOKIES NEEDED!)
             # This works for most videos and doesn't require cookies or video info
             print("Fetching transcript directly from YouTube...")
-            transcript = self.get_youtube_transcript(youtube_url)
+            transcript, transcript_error_type = self.get_youtube_transcript(youtube_url)
             
             # Step 2: Get video information (optional - may fail if YouTube blocks the request)
             # If video_info fails, we can still proceed with just the transcript
@@ -977,7 +1000,10 @@ Make it engaging, informative, and suitable for a blog audience."""
             
             # If we don't have transcript and audio download is disabled, we need to fail
             if not transcript and not use_audio_download:
-                result['error'] = 'Could not get transcript. This video may not have auto-generated transcripts. Enable "Advanced Options" and check "Download audio/video if transcript is unavailable" to use audio transcription instead.'
+                if transcript_error_type == 'ip_blocked':
+                    result['error'] = 'YouTube is blocking requests from this server (cloud provider IP). This is a known limitation when running on AWS/cloud providers. Please try again later, or use a different network/VPN if available.'
+                else:
+                    result['error'] = 'Could not get transcript. This video may not have auto-generated transcripts. Enable "Advanced Options" and check "Download audio/video if transcript is unavailable" to use audio transcription instead.'
                 return result
             
             # Step 3: If direct transcript failed, fall back to audio download + transcription (only if enabled)
